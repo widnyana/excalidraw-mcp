@@ -452,7 +452,12 @@ function ExcalidrawApp() {
           />
         </div>
       ) : (
-        <DiagramView toolInput={toolInput} isFinal={inputIsFinal} displayMode={displayMode} onElements={setElements} editedElements={userEdits ?? undefined} />
+        <div
+          onClick={displayMode === "inline" ? toggleFullscreen : undefined}
+          style={{ cursor: displayMode === "inline" ? "pointer" : undefined }}
+        >
+          <DiagramView toolInput={toolInput} isFinal={inputIsFinal} displayMode={displayMode} onElements={setElements} editedElements={userEdits ?? undefined} />
+        </div>
       )}
     </main>
   );
