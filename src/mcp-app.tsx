@@ -59,14 +59,21 @@ function extractViewportAndElements(elements: any[]): {
       viewport = { x: el.x, y: el.y, width: el.width, height: el.height };
     } else if (el.type === "restoreCheckpoint") {
       restoreId = el.id;
-    } else if (el.type === "deleteElement") {
-      deleteIds.add(el.id);
+    } else if (el.type === "delete") {
+      for (const id of String(el.ids ?? el.id).split(",")) deleteIds.add(id.trim());
     } else {
       drawElements.push(el);
     }
   }
 
-  return { viewport, drawElements, restoreId, deleteIds };
+  // Hide deleted elements via near-zero opacity instead of removing — preserves SVG
+  // group count/order so morphdom matches by position correctly (no cascade re-animations).
+  // Using 1 (not 0) because Excalidraw treats opacity:0 as "unset" → defaults to 100.
+  const processedDraw = deleteIds.size > 0
+    ? drawElements.map((el: any) => deleteIds.has(el.id) ? { ...el, opacity: 1 } : el)
+    : drawElements;
+
+  return { viewport, drawElements: processedDraw, restoreId, deleteIds };
 }
 
 const ExpandIcon = () => (
@@ -413,12 +420,14 @@ function DiagramView({ toolInput, isFinal, displayMode, onElements, editedElemen
     // Partial input — drop last (potentially incomplete) element
     const parsed = parsePartialElements(str);
 
-    // Extract restoreCheckpoint and deleteElement before dropping last (they're small, won't be incomplete)
+    // Extract restoreCheckpoint and delete before dropping last (they're small, won't be incomplete)
     let streamRestoreId: string | null = null;
     const streamDeleteIds = new Set<string>();
     for (const el of parsed) {
       if (el.type === "restoreCheckpoint") streamRestoreId = el.id;
-      else if (el.type === "deleteElement") streamDeleteIds.add(el.id);
+      else if (el.type === "delete") {
+        for (const id of String(el.ids ?? el.id).split(",")) streamDeleteIds.add(id.trim());
+      }
     }
 
     const safe = excludeIncompleteLastItem(parsed);

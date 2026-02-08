@@ -299,6 +299,74 @@ Every create_view call returns a \`checkpointId\` in its response. To continue f
 
 The saved state (including any user edits made in fullscreen) is loaded from the client, and your new elements are appended on top. This saves tokens — you don't need to re-send the entire diagram.
 
+## Deleting Elements
+
+Remove elements by id using the \`delete\` pseudo-element:
+
+\`{"type":"delete","ids":"b2,a1,t3"}\`
+
+Works in two modes:
+- **With restoreCheckpoint**: restore a saved state, then surgically remove specific elements before adding new ones
+- **Inline (animation mode)**: draw elements, then delete and replace them later in the same array to create transformation effects
+
+Place delete entries AFTER the elements you want to remove. The final render filters them out.
+
+**IMPORTANT**: Every element id must be unique. Never reuse an id after deleting it — always assign a new id to replacement elements.
+
+## Animation Mode — Transform in Place
+
+Instead of building left-to-right and panning away, you can animate by DELETING elements and replacing them at the same position. Combined with slight camera moves, this creates smooth visual transformations during streaming.
+
+Pattern:
+1. Draw initial elements
+2. cameraUpdate (shift/zoom slightly)
+3. \`{"type":"delete","ids":"old1,old2"}\`
+4. Draw replacements at same coordinates (different color/content)
+5. Repeat
+
+Example prompt: "Pixel snake eats apple"
+
+Snake moves right by adding a head segment and deleting the tail. On eating the apple, tail is NOT deleted (snake grows). Camera nudges between frames add subtle motion.
+
+\`\`\`json
+[
+  {"type":"cameraUpdate","width":400,"height":300,"x":0,"y":0},
+  {"type":"ellipse","id":"ap","x":260,"y":78,"width":20,"height":20,"backgroundColor":"#ef4444","fillStyle":"solid","strokeColor":"#ef4444"},
+  {"type":"rectangle","id":"s0","x":60,"y":130,"width":28,"height":28,"backgroundColor":"#22c55e","fillStyle":"solid","strokeColor":"#15803d","strokeWidth":1},
+  {"type":"rectangle","id":"s1","x":88,"y":130,"width":28,"height":28,"backgroundColor":"#22c55e","fillStyle":"solid","strokeColor":"#15803d","strokeWidth":1},
+  {"type":"rectangle","id":"s2","x":116,"y":130,"width":28,"height":28,"backgroundColor":"#22c55e","fillStyle":"solid","strokeColor":"#15803d","strokeWidth":1},
+  {"type":"rectangle","id":"s3","x":144,"y":130,"width":28,"height":28,"backgroundColor":"#22c55e","fillStyle":"solid","strokeColor":"#15803d","strokeWidth":1},
+  {"type":"cameraUpdate","width":400,"height":300,"x":1,"y":0},
+  {"type":"rectangle","id":"s4","x":172,"y":130,"width":28,"height":28,"backgroundColor":"#22c55e","fillStyle":"solid","strokeColor":"#15803d","strokeWidth":1},
+  {"type":"delete","ids":"s0"},
+  {"type":"cameraUpdate","width":400,"height":300,"x":0,"y":1},
+  {"type":"rectangle","id":"s5","x":200,"y":130,"width":28,"height":28,"backgroundColor":"#22c55e","fillStyle":"solid","strokeColor":"#15803d","strokeWidth":1},
+  {"type":"delete","ids":"s1"},
+  {"type":"cameraUpdate","width":400,"height":300,"x":1,"y":0},
+  {"type":"rectangle","id":"s6","x":228,"y":130,"width":28,"height":28,"backgroundColor":"#22c55e","fillStyle":"solid","strokeColor":"#15803d","strokeWidth":1},
+  {"type":"delete","ids":"s2"},
+  {"type":"cameraUpdate","width":400,"height":300,"x":0,"y":0},
+  {"type":"rectangle","id":"s7","x":256,"y":130,"width":28,"height":28,"backgroundColor":"#22c55e","fillStyle":"solid","strokeColor":"#15803d","strokeWidth":1},
+  {"type":"delete","ids":"s3"},
+  {"type":"cameraUpdate","width":400,"height":300,"x":1,"y":1},
+  {"type":"rectangle","id":"s8","x":256,"y":102,"width":28,"height":28,"backgroundColor":"#22c55e","fillStyle":"solid","strokeColor":"#15803d","strokeWidth":1},
+  {"type":"delete","ids":"s4"},
+  {"type":"cameraUpdate","width":400,"height":300,"x":0,"y":0},
+  {"type":"rectangle","id":"s9","x":256,"y":74,"width":28,"height":28,"backgroundColor":"#22c55e","fillStyle":"solid","strokeColor":"#15803d","strokeWidth":1},
+  {"type":"delete","ids":"ap"},
+  {"type":"cameraUpdate","width":400,"height":300,"x":1,"y":0},
+  {"type":"rectangle","id":"s10","x":256,"y":46,"width":28,"height":28,"backgroundColor":"#22c55e","fillStyle":"solid","strokeColor":"#15803d","strokeWidth":1},
+  {"type":"delete","ids":"s5"}
+]
+\`\`\`
+
+Key techniques:
+- Add head + delete tail each frame = snake movement illusion
+- On eat: delete apple instead of tail = snake grows by one
+- Post-eat frame resumes normal add-head/delete-tail, proving the snake is now longer
+- Camera nudges (0,0 → 1,0 → 0,1 → ...) add subtle motion between frames
+- Always use NEW ids for added segments (s0→s4→s5→...); never reuse deleted ids
+
 ## Dark Mode
 
 If the user asks for a dark theme/mode diagram, use a massive dark background rectangle as the FIRST element (before cameraUpdate). Make it 10x the camera size so it covers the entire viewport even when panning:
@@ -392,7 +460,7 @@ However, if the user wants to edit something on this diagram "${checkpointId}", 
 2) decide whether you want to make new diagram from scratch OR - use this one as starting checkpoint:
   simply start from the first element [{"type":"restoreCheckpoint","id":"${checkpointId}"}, ...your new elements...]
   this will use same diagram state as the user currently sees, including any manual edits they made in fullscreen, allowing you to add elements on top.
-  To remove elements from the restored state, use: {"type":"deleteElement","id":"<elementId>"}` }],
+  To remove elements, use: {"type":"delete","ids":"<id1>,<id2>"}` }],
         structuredContent: { checkpointId },
       };
     },
